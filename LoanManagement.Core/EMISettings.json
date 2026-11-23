@@ -1,0 +1,58 @@
+{
+  "InstallmentCount": 10,
+  "EMIRates": [
+    {
+      "LoanAmount": 5000,
+      "EMIAmount": 600
+    },
+    {
+      "LoanAmount": 10000,
+      "EMIAmount": 1200
+    },
+    {
+      "LoanAmount": 15000,
+      "EMIAmount": 1800
+    },
+    {
+      "LoanAmount": 20000,
+      "EMIAmount": 2400
+    },
+    {
+      "LoanAmount": 25000,
+      "EMIAmount": 3000
+    },
+    {
+      "LoanAmount": 30000,
+      "EMIAmount": 3600
+    },
+    {
+      "LoanAmount": 35000,
+      "EMIAmount": 4200
+    },
+    {
+      "LoanAmount": 40000,
+      "EMIAmount": 4800
+    },
+    {
+      "LoanAmount": 45000,
+      "EMIAmount": 5400
+    },
+    {
+      "LoanAmount": 50000,
+      "EMIAmount": 6000
+    }
+  ],
+  "PenaltyRules": [
+    {
+      "MinimumLoanAmount": 10000,
+      "MaximumLoanAmount": 30000,
+      "PenaltyAmount": 100
+    },
+    {
+      "MinimumLoanAmount": 30001,
+      "MaximumLoanAmount": 50000,
+      "PenaltyAmount": 150
+    }
+  ],
+  "OverdueDays": 3
+}

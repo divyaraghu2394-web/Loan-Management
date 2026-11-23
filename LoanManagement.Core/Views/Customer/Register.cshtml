@@ -1,0 +1,634 @@
+﻿
+@model LoanManagement.Core.ViewModels.CustomerRegistrationViewModel
+
+@{
+    ViewData["Title"] = "New Loan Application";
+}
+
+<div class="loan-application-page">
+    <div class="loan-application-hero">
+        <div>
+            <div class="page-eyebrow">Loan origination</div>
+            <h1>New loan application</h1>
+            <p>Capture verified applicant details, documents, and loan terms in one secure application.</p>
+        </div>
+        <div class="loan-application-meta">
+            <span class="loan-status-dot"></span>
+            <span>Draft application</span>
+        </div>
+    </div>
+
+    <div class="loan-stepper" aria-label="Application steps">
+        <button type="button" class="loan-step loan-step-active" data-step-target="1"><span>1</span><strong>Applicant</strong></button>
+        <div class="loan-step-line"></div>
+        <button type="button" class="loan-step" data-step-target="2"><span>2</span><strong>Documents</strong></button>
+        <div class="loan-step-line"></div>
+        <button type="button" class="loan-step" data-step-target="3"><span>3</span><strong>Loan terms</strong></button>
+    </div>
+
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div id="customerSuccessToast"
+             class="customer-success-toast"
+             role="status"
+             aria-live="polite">
+            <span class="customer-success-icon">✓</span>
+            <span>@TempData["SuccessMessage"]</span>
+            <button type="button"
+                    class="customer-toast-close"
+                    aria-label="Close">&times;</button>
+        </div>
+    }
+
+    <form asp-controller="Customer"
+          asp-action="Register"
+          method="post"
+          enctype="multipart/form-data"
+          novalidate>
+
+        @Html.AntiForgeryToken()
+
+        <div asp-validation-summary="ModelOnly"
+             class="customer-validation-summary mb-4"></div>
+
+        <section class="loan-section-card mb-4 loan-step-panel" data-step-panel="1">
+            <div class="loan-section-heading">
+                <div class="loan-section-number">01</div>
+                <div>
+                    <h2>Applicant information</h2>
+                    <p>Use the applicant's official identity details for verification.</p>
+                </div>
+            </div>
+
+            <div class="loan-form-grid">
+
+                <div class="customer-field">
+                    <label asp-for="CustomerName" class="form-label"></label>
+                    <div class="customer-input-wrap">
+                        <input asp-for="CustomerName" class="form-control" placeholder="Applicant Name" required />
+                        <span asp-validation-for="CustomerName" class="customer-field-error"></span>
+                    </div>
+                </div>
+
+                <div class="customer-field">
+                    <label asp-for="AadhaarNumber" class="form-label"></label>
+                    <div class="customer-input-wrap">
+                        <input asp-for="AadhaarNumber" class="form-control" placeholder="12-Digit Aadhaar Number" maxlength="12" inputmode="numeric" autocomplete="off" required />
+                        <span asp-validation-for="AadhaarNumber" class="customer-field-error"></span>
+                    </div>
+                </div>
+
+                <div class="customer-field">
+                    <label asp-for="PANNumber" class="form-label"></label>
+                    <div class="customer-input-wrap">
+                        <input asp-for="PANNumber" class="form-control" placeholder="PAN Number" maxlength="10" required />
+                        <span asp-validation-for="PANNumber" class="customer-field-error"></span>
+                    </div>
+                </div>
+
+                <div class="customer-field">
+                    <label asp-for="PrimaryContactNo"
+                           class="form-label"></label>
+
+                    <div class="customer-input-wrap">
+                        <input asp-for="PrimaryContactNo" class="form-control" placeholder="Primary Contact Number" maxlength="10" inputmode="numeric" required />
+                        <span asp-validation-for="PrimaryContactNo" class="customer-field-error"></span>
+                    </div>
+                </div>
+
+                <div class="customer-field">
+                    <label asp-for="SecondaryContactNo"
+                           class="form-label"></label>
+
+                    <div class="customer-input-wrap">
+                        <input asp-for="SecondaryContactNo" class="form-control" placeholder="Secondary Contact Number" maxlength="10" inputmode="numeric" required />
+                        <span asp-validation-for="SecondaryContactNo" class="customer-field-error"></span>
+                    </div>
+                </div>
+
+                <div class="customer-field">
+                    <label asp-for="ReferredPerson" class="form-label"></label>
+
+                    <div class="customer-input-wrap">
+                        <input asp-for="ReferredPerson" class="form-control" placeholder="Referrer Name" required />
+                        <span asp-validation-for="ReferredPerson" class="customer-field-error"></span>
+                    </div>
+                </div>
+
+                <div class="customer-field">
+                    <label asp-for="ReferredContactNo"
+                           class="form-label"></label>
+
+                    <div class="customer-input-wrap">
+                        <input asp-for="ReferredContactNo" class="form-control" placeholder="Referrer Contact Number" maxlength="10" inputmode="numeric" required />
+                        <span asp-validation-for="ReferredContactNo" class="customer-field-error"></span>
+                    </div>
+                </div>
+
+            </div>
+            <div class="loan-wizard-actions loan-wizard-actions-end">
+                <button type="button" class="btn loan-submit-button loan-next-button" data-next-step="2">Continue to documents <span aria-hidden="true">→</span></button>
+            </div>
+            <div id="applicantVerificationMessage" class="applicant-verification-message" hidden role="alert"></div>
+        </section>
+
+        <section class="loan-section-card mb-4 loan-step-panel" data-step-panel="2" hidden>
+            <div class="loan-section-heading">
+                <div class="loan-section-number">02</div>
+                <div>
+                    <h2>Application documents</h2>
+                    <p>Upload valid identity documents, a customer photo, and signature for the loan record.</p>
+                </div>
+            </div>
+
+            <div class="loan-form-grid">
+                <div class="customer-field loan-field-wide">
+                    <label asp-for="AadhaarDocument" class="form-label">Aadhaar Document</label>
+                    <div class="customer-input-wrap">
+                        <input asp-for="AadhaarDocument" type="file" class="form-control identity-document-upload" accept=".jpg,.jpeg,.png,.webp,.pdf" data-preview-target="aadhaarDocumentPreview" required />
+                        <span asp-validation-for="AadhaarDocument" class="customer-field-error"></span>
+                    </div>
+                    <div class="customer-upload-help">Upload the Aadhaar card image or PDF.</div>
+                    <div id="aadhaarDocumentPreview" class="customer-upload-preview" hidden></div>
+                </div>
+
+                <div class="customer-field loan-field-wide">
+                    <label asp-for="PANDocument" class="form-label">PAN Document</label>
+                    <div class="customer-input-wrap">
+                        <input asp-for="PANDocument" type="file" class="form-control identity-document-upload" accept=".jpg,.jpeg,.png,.webp,.pdf" data-preview-target="panDocumentPreview" required />
+                        <span asp-validation-for="PANDocument" class="customer-field-error"></span>
+                    </div>
+                    <div class="customer-upload-help">Upload the PAN card image or PDF.</div>
+                    <div id="panDocumentPreview" class="customer-upload-preview" hidden></div>
+                </div>
+
+                <div class="customer-field loan-field-wide">
+                    <label asp-for="Photo" class="form-label">Customer Photo</label>
+                    <div class="customer-input-wrap">
+                        <input asp-for="Photo" type="file" class="form-control" accept="image/*" data-preview-target="photoPreview" required />
+                        <span asp-validation-for="Photo" class="customer-field-error"></span>
+                    </div>
+                    <div id="photoPreview" class="customer-upload-preview" hidden></div>
+                </div>
+
+                <div class="customer-field loan-field-wide">
+                    <label asp-for="SignatureImage" class="form-label">Signature Image</label>
+                    <div class="customer-input-wrap">
+                        <input asp-for="SignatureImage" type="file" class="form-control" accept="image/*" data-preview-target="signaturePreview" required />
+                        <span asp-validation-for="SignatureImage" class="customer-field-error"></span>
+                    </div>
+                    <div id="signaturePreview" class="customer-upload-preview" hidden></div>
+                </div>
+            </div>
+            <div id="documentsVerificationMessage" class="applicant-verification-message" hidden role="alert"></div>
+            <div class="loan-wizard-actions">
+                <button type="button" class="btn loan-cancel-button loan-back-button" data-prev-step="1">← Back</button>
+                <button type="button" class="btn loan-submit-button loan-next-button" data-next-step="3">Continue to loan terms <span aria-hidden="true">→</span></button>
+            </div>
+        </section>
+
+        <section class="loan-section-card mb-4 loan-step-panel" data-step-panel="3" hidden>
+            <div class="loan-section-heading">
+                <div class="loan-section-number">03</div>
+                <div>
+                    <h2>Loan terms</h2>
+                    <p>Select the requested amount and review the calculated repayment schedule.</p>
+                </div>
+            </div>
+
+            <div class="loan-form-grid loan-terms-grid">
+
+                <div class="customer-field">
+                    <label asp-for="LoanAmount"
+                           class="form-label"></label>
+
+                    <div class="customer-input-wrap">
+                        <input asp-for="LoanAmount" type="number" min="5000" max="50000" step="5000" class="form-control" id="LoanAmount" placeholder="Loan Amount" required />
+                        <span asp-validation-for="LoanAmount" class="customer-field-error"></span>
+                    </div>
+                </div>
+
+                <div class="customer-field loan-readonly-field">
+                    <label class="form-label">
+                        EMI Amount
+                    </label>
+
+                    <input id="EMIAmount"
+                           class="form-control"
+                           readonly />
+                </div>
+
+                <div class="customer-field loan-readonly-field">
+                    <label class="form-label">
+                        Installment Count
+                    </label>
+
+                    <input id="InstallmentCount"
+                           class="form-control"
+                           readonly />
+                </div>
+
+                <div class="customer-field loan-readonly-field">
+                    <label class="form-label">
+                        Total EMI Amount
+                    </label>
+
+                    <input id="TotalEMIAmount"
+                           class="form-control"
+                           readonly />
+                </div>
+
+                <div class="customer-field loan-field-wide">
+                    <label asp-for="Remarks"
+                           class="form-label"></label>
+
+                    <div class="customer-input-wrap customer-textarea-wrap">
+                        <textarea asp-for="Remarks" class="form-control" rows="4" placeholder="Add any relevant notes"></textarea>
+                    </div>
+                </div>
+
+            </div>
+            <div class="loan-wizard-actions">
+                <button type="button" class="btn loan-cancel-button loan-back-button" data-prev-step="2">← Back</button>
+            </div>
+        </section>
+
+        <div class="loan-form-footer loan-step-panel" data-step-panel="3" hidden>
+            <div>
+                <strong>Ready to submit?</strong>
+                <span>Review all required details before creating the loan account.</span>
+            </div>
+            <button type="submit"
+                    class="btn loan-submit-button">
+                Submit loan application <span aria-hidden="true">→</span>
+            </button>
+        </div>
+
+    </form>
+</div>
+
+@section Scripts {
+
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jquery-validation@1.19.5/dist/jquery.validate.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jquery-validation-unobtrusive@4.0.0/dist/jquery.validate.unobtrusive.min.js"></script>
+
+    <script>
+        const applicationForm = document.querySelector('form[asp-action="Register"]') || document.querySelector('form');
+        const stepPanels = Array.from(document.querySelectorAll("[data-step-panel]"));
+        const stepButtons = Array.from(document.querySelectorAll("[data-step-target]"));
+        let currentStep = 1;
+
+        function validateCurrentStep() {
+            const panel = document.querySelector(`[data-step-panel="${currentStep}"]`);
+
+            if (!panel || !window.jQuery || !applicationForm) {
+                return true;
+            }
+
+            let isValid = true;
+
+            panel.querySelectorAll("input, select, textarea").forEach(function (field) {
+                if (!field.disabled && !$(field).valid()) {
+                    isValid = false;
+                }
+            });
+
+            return isValid;
+        }
+
+        function showStep(stepNumber) {
+            currentStep = stepNumber;
+
+            stepPanels.forEach(function (panel) {
+                panel.hidden = panel.dataset.stepPanel !== String(stepNumber);
+            });
+
+            stepButtons.forEach(function (button) {
+                const buttonStep = Number(button.dataset.stepTarget);
+                button.classList.toggle("loan-step-active", buttonStep === stepNumber);
+                button.classList.toggle("loan-step-complete", buttonStep < stepNumber);
+            });
+
+            document.querySelector(".loan-application-page")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+
+        function setFieldError(fieldId, message) {
+            const field = document.getElementById(fieldId);
+            const error = field?.closest(".customer-input-wrap")?.querySelector(".customer-field-error");
+
+            if (!error) {
+                return;
+            }
+
+            error.textContent = message || "";
+            error.classList.toggle("field-validation-error", Boolean(message));
+        }
+
+        function clearFieldErrors(fieldIds) {
+            fieldIds.forEach(function (fieldId) {
+                setFieldError(fieldId, "");
+            });
+        }
+
+        async function verifyApplicant() {
+            const verificationMessage = document.getElementById("applicantVerificationMessage");
+            const token = document.querySelector('input[name="__RequestVerificationToken"]').value;
+            const formData = new FormData();
+
+            clearFieldErrors(["AadhaarNumber", "PANNumber"]);
+
+            formData.append("__RequestVerificationToken", token);
+            formData.append("customerName", document.getElementById("CustomerName").value.trim());
+            formData.append("aadhaarNumber", document.getElementById("AadhaarNumber").value.trim());
+            formData.append("panNumber", document.getElementById("PANNumber").value.trim().toUpperCase());
+
+            verificationMessage.hidden = false;
+            verificationMessage.className = "applicant-verification-message applicant-verification-loading";
+            verificationMessage.textContent = "Verifying applicant details...";
+
+            try {
+                const response = await fetch("/Customer/CheckCustomer", {
+                    method: "POST",
+                    body: formData,
+                    headers: { "X-Requested-With": "XMLHttpRequest" }
+                });
+
+                const result = await response.json();
+
+                if (!response.ok || !result.success) {
+                    const fieldErrors = result.fieldErrors || {};
+                    setFieldError("AadhaarNumber", fieldErrors.aadhaarNumber);
+                    setFieldError("PANNumber", fieldErrors.panNumber);
+                    verificationMessage.className = "applicant-verification-message applicant-verification-error";
+                    verificationMessage.textContent = result.message || "Applicant verification failed.";
+                    return false;
+                }
+
+                verificationMessage.className = "applicant-verification-message applicant-verification-success";
+                verificationMessage.textContent = result.message || "Applicant details verified successfully.";
+                return true;
+            }
+            catch (error) {
+                verificationMessage.className = "applicant-verification-message applicant-verification-error";
+                verificationMessage.textContent = "Unable to verify applicant details. Please try again.";
+                return false;
+            }
+        }
+
+        async function verifyDocuments() {
+            const verificationMessage = document.getElementById("documentsVerificationMessage");
+            const aadhaarDocument = document.getElementById("AadhaarDocument");
+            const panDocument = document.getElementById("PANDocument");
+            const token = document.querySelector('input[name="__RequestVerificationToken"]').value;
+            const formData = new FormData();
+
+            clearFieldErrors(["AadhaarDocument", "PANDocument"]);
+            formData.append("__RequestVerificationToken", token);
+            formData.append("aadhaarDocument", aadhaarDocument.files[0]);
+            formData.append("panDocument", panDocument.files[0]);
+            formData.append("aadhaarNumber", document.getElementById("AadhaarNumber").value.trim());
+            formData.append("panNumber", document.getElementById("PANNumber").value.trim().toUpperCase());
+
+            verificationMessage.hidden = false;
+            verificationMessage.className = "applicant-verification-message applicant-verification-loading";
+            verificationMessage.textContent = "Verifying Aadhaar and PAN documents...";
+
+            try {
+                const response = await fetch("/Customer/ValidateDocuments", {
+                    method: "POST",
+                    body: formData,
+                    headers: { "X-Requested-With": "XMLHttpRequest" }
+                });
+
+                const result = await response.json();
+
+                if (!response.ok || !result.success) {
+                    const fieldErrors = result.fieldErrors || {};
+                    setFieldError("AadhaarDocument", fieldErrors.aadhaarDocument);
+                    setFieldError("PANDocument", fieldErrors.panDocument);
+                    verificationMessage.className = "applicant-verification-message applicant-verification-error";
+                    verificationMessage.textContent = result.message || "Document verification failed.";
+                    return false;
+                }
+
+                verificationMessage.className = "applicant-verification-message applicant-verification-success";
+                verificationMessage.textContent = result.message || "Identity documents verified successfully.";
+                return true;
+            }
+            catch (error) {
+                verificationMessage.className = "applicant-verification-message applicant-verification-error";
+                verificationMessage.textContent = "Unable to verify identity documents. Please try again.";
+                return false;
+            }
+        }
+
+        document.querySelectorAll("[data-next-step]").forEach(function (button) {
+            button.addEventListener("click", async function () {
+                if (validateCurrentStep()) {
+                    if (currentStep === 1 && !(await verifyApplicant())) {
+                        return;
+                    }
+
+                    if (currentStep === 2 && !(await verifyDocuments())) {
+                        return;
+                    }
+
+                    showStep(Number(this.dataset.nextStep));
+                }
+            });
+        });
+
+        document.querySelectorAll("[data-prev-step]").forEach(function (button) {
+            button.addEventListener("click", function () {
+                showStep(Number(this.dataset.prevStep));
+            });
+        });
+
+        stepButtons.forEach(function (button) {
+            button.addEventListener("click", async function () {
+                const targetStep = Number(this.dataset.stepTarget);
+
+                if (targetStep <= currentStep) {
+                    showStep(targetStep);
+                    return;
+                }
+
+                if (targetStep !== currentStep + 1 || !validateCurrentStep()) {
+                    return;
+                }
+
+                if (currentStep === 1 && !(await verifyApplicant())) {
+                    return;
+                }
+
+                if (currentStep === 2 && !(await verifyDocuments())) {
+                    return;
+                }
+
+                showStep(targetStep);
+            });
+        });
+
+        showStep(1);
+
+        const aadhaarInput = document.getElementById("AadhaarNumber");
+
+        aadhaarInput.addEventListener("input", function () {
+            this.value = this.value.replace(/\D/g, "").slice(0, 12);
+        });
+
+        const panInput = document.getElementById("PANNumber");
+        function normalizePan() {
+            panInput.value = panInput.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 10);
+        }
+
+        panInput.addEventListener("input", function () {
+            normalizePan();
+        });
+
+        panInput.addEventListener("blur", function () {
+            normalizePan();
+            $(panInput).valid();
+        });
+
+        normalizePan();
+
+        document.querySelectorAll('input[type="file"][data-preview-target]').forEach(function (input) {
+            input.addEventListener("change", function () {
+                const preview = document.getElementById(this.dataset.previewTarget);
+                const file = this.files && this.files[0];
+                const isIdentityDocument = this.classList.contains("identity-document-upload");
+                const allowedExtensions = isIdentityDocument
+                    ? [".jpg", ".jpeg", ".png", ".webp", ".pdf"]
+                    : [".jpg", ".jpeg", ".png", ".webp"];
+                const extension = file ? file.name.substring(file.name.lastIndexOf(".")).toLowerCase() : "";
+                const maximumSize = isIdentityDocument ? 10 * 1024 * 1024 : 5 * 1024 * 1024;
+
+                this.setCustomValidity("");
+
+                if (file && (!allowedExtensions.includes(extension) || file.size === 0 || file.size > maximumSize)) {
+                    this.setCustomValidity(isIdentityDocument
+                        ? "Upload a JPG, JPEG, PNG, WEBP, or PDF file up to 10 MB."
+                        : "Upload a JPG, JPEG, PNG, or WEBP file up to 5 MB.");
+                    preview.replaceChildren();
+                    preview.hidden = true;
+                    $(this).valid();
+                    return;
+                }
+
+                preview.replaceChildren();
+                preview.hidden = !file;
+
+                if (!file) {
+                    return;
+                }
+
+                if (extension === ".pdf") {
+                    const details = document.createElement("div");
+                    details.className = "customer-upload-details";
+                    details.innerHTML = `<strong>${file.name}</strong><small>${Math.ceil(file.size / 1024)} KB PDF document</small>`;
+                    preview.append(details);
+                    return;
+                }
+
+                const imageUrl = URL.createObjectURL(file);
+                const image = document.createElement("img");
+                image.src = imageUrl;
+                image.alt = file.name;
+
+                const details = document.createElement("div");
+                details.className = "customer-upload-details";
+                details.innerHTML = `<strong>${file.name}</strong><small>${Math.ceil(file.size / 1024)} KB</small>`;
+
+                const actions = document.createElement("div");
+                actions.className = "customer-upload-actions";
+
+                const viewLink = document.createElement("a");
+                viewLink.href = imageUrl;
+                viewLink.target = "_blank";
+                viewLink.rel = "noopener";
+                viewLink.className = "btn btn-sm btn-outline-primary";
+                viewLink.textContent = "View";
+
+                const downloadLink = document.createElement("a");
+                downloadLink.href = imageUrl;
+                downloadLink.download = file.name;
+                downloadLink.className = "btn btn-sm btn-outline-secondary";
+                downloadLink.textContent = "Download";
+
+                actions.append(viewLink, downloadLink);
+                preview.append(image, details, actions);
+            });
+        });
+
+        document.querySelector(".customer-toast-close")?.addEventListener("click", function () {
+            document.getElementById("customerSuccessToast")?.remove();
+        });
+
+        setTimeout(function () {
+            document.getElementById("customerSuccessToast")?.remove();
+        }, 7000);
+
+        const loanAmountInput =
+            document.getElementById("LoanAmount");
+
+        const emiInput =
+            document.getElementById("EMIAmount");
+
+        const countInput =
+            document.getElementById("InstallmentCount");
+
+        const totalInput =
+            document.getElementById("TotalEMIAmount");
+
+        let requestTimer;
+
+        /*
+         * EMI calculation
+         */
+        loanAmountInput.addEventListener("input", function () {
+
+            clearTimeout(requestTimer);
+
+            emiInput.value = "";
+            countInput.value = "";
+            totalInput.value = "";
+
+            const amount = Number(this.value);
+
+            if (!amount || amount <= 0)
+                return;
+
+            requestTimer = setTimeout(async function () {
+
+                try {
+
+                    const response = await fetch(
+                        `/Customer/GetEMIAmount?loanAmount=${amount}`
+                    );
+
+                    const result = await response.json();
+
+                    if (!response.ok || !result.success) {
+                        return;
+                    }
+
+                    emiInput.value = result.emiAmount;
+                    countInput.value = result.installmentCount;
+                    totalInput.value = result.totalEMIAmount;
+
+                }
+                catch (error) {
+
+                    console.error(
+                        "Unable to calculate EMI.",
+                        error
+                    );
+                }
+
+            }, 300);
+        });
+
+    </script>
+}

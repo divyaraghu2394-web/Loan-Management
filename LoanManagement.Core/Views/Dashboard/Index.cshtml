@@ -1,0 +1,225 @@
+﻿
+@model LoanManagement.Core.ViewModels.DashboardViewModel
+
+@{
+    ViewData["Title"] = "Dashboard";
+    var currencyCulture = new System.Globalization.CultureInfo("en-IN");
+}
+
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-end gap-3 mb-4">
+    <div>
+        <div class="page-eyebrow">Operations overview</div>
+        <h1 class="h2 mb-1 mt-2">Good morning, Administrator</h1>
+        <p class="text-secondary mb-0">Here is today’s loan and collection activity.</p>
+    </div>
+    <div class="text-md-end">
+        <div class="small text-secondary">Business date</div>
+        <div class="fw-semibold">@Model.BusinessDate.ToString("dddd, MMMM d, yyyy")</div>
+    </div>
+</div>
+
+@if (TempData["ErrorMessage"] != null)
+{
+    <div class="alert alert-warning border-0 shadow-sm" role="alert">
+        @TempData["ErrorMessage"]
+    </div>
+}
+
+<section class="card mb-4" aria-labelledby="emiCollectionsHeading">
+    <div class="card-header p-3 p-lg-4">
+        <div class="d-flex flex-column flex-sm-row justify-content-between gap-2 align-items-sm-center">
+            <div>
+                <h2 id="emiCollectionsHeading" class="h5 mb-1">EMI Collections</h2>
+                <p class="small text-secondary mb-0">Active customer loans ready for collection.</p>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <span id="dashboardLoanCount" class="badge text-bg-light border text-secondary">@Model.ActiveLoans.Count() active loans</span>
+            </div>
+        </div>
+    </div>
+    <div class="card-body p-0">
+        <div class="p-3 p-lg-4 border-bottom">
+            <form asp-controller="Dashboard" asp-action="Index" method="get" class="dashboard-search-form">
+                <label for="dashboardCustomerSearch" class="visually-hidden">Search customer name</label>
+                <span class="dashboard-search-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false">
+                        <circle cx="11" cy="11" r="6.5"></circle>
+                        <path d="m16 16 5 5"></path>
+                    </svg>
+                </span>
+                <input id="dashboardCustomerSearch"
+                       name="searchTerm"
+                       value="@Model.SearchTerm"
+                       class="dashboard-search-input"
+                       placeholder="Search customer name"
+                       autocomplete="off" />
+                <button type="button"
+                        id="dashboardSearchClear"
+                        class="dashboard-search-clear"
+                        aria-label="Clear customer search"
+                        hidden>&times;</button>
+                <button type="submit" class="dashboard-search-submit" aria-label="Search customers">
+                    <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                        <circle cx="11" cy="11" r="6.5"></circle>
+                        <path d="m16 16 5 5"></path>
+                    </svg>
+                </button>
+            </form>
+        </div>
+
+        @if (Model.ActiveLoans.Any())
+        {
+            <div class="table-responsive">
+                <table class="table align-middle mb-0 dashboard-table">
+                    <thead>
+                        <tr>
+                            <th class="ps-3 ps-lg-4">Photo</th>
+                            <th class="ps-3 ps-lg-4">Customer</th>
+                            <th>Contact</th>
+                            <th class="text-end">EMI amount</th>
+                            <th class="text-center">Collected</th>
+                            <th class="text-center">Remaining</th>
+                            <th>Next EMI Date</th>
+                            <th class="text-end">Pending</th>
+                            <th class="text-end pe-3 pe-lg-4">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var customer in Model.ActiveLoans)
+                        {
+                            <tr data-customer-name="@customer.CustomerName">
+                                <td class="ps-3 ps-lg-4">
+                                    @if (!string.IsNullOrWhiteSpace(customer.PhotoPath))
+                                    {
+                                        <img src="@customer.PhotoPath"
+                                             alt="@customer.CustomerName profile photo"
+                                             class="dashboard-avatar" />
+                                    }
+                                    else
+                                    {
+                                        <span class="dashboard-avatar dashboard-avatar-empty">
+                                            @customer.CustomerName.FirstOrDefault()
+                                        </span>
+                                    }
+                                </td>
+                                <td class="ps-3 ps-lg-4 fw-semibold">@customer.CustomerName</td>
+                                <td class="text-secondary">@(string.IsNullOrWhiteSpace(customer.PrimaryContactNo) ? "-" : customer.PrimaryContactNo)</td>
+                                <td class="text-end">@customer.EMIAmount.ToString("C0", currencyCulture)</td>
+                                <td class="text-center text-success fw-semibold">@customer.CollectedInstallments</td>
+                                <td class="text-center text-danger fw-semibold">@customer.RemainingInstallments</td>
+                                <td title="Weekly EMI — every Wednesday">
+                                    @if (customer.UpcomingEMIDates.Any())
+                                    {
+                                        <details class="dashboard-emi-schedule">
+                                            <summary>
+                                                <span class="dashboard-next-emi-date">
+                                                    @customer.UpcomingEMIDates[0].ToString("ddd, dd MMM yyyy")
+                                                </span>
+                                                <span class="dashboard-emi-schedule-count">
+                                                    @customer.UpcomingEMIDates.Count dates
+                                                </span>
+                                            </summary>
+                                            <div class="dashboard-emi-schedule-list">
+                                                @foreach (var emiDate in customer.UpcomingEMIDates)
+                                                {
+                                                    <span>@emiDate.ToString("ddd, dd MMM yyyy")</span>
+                                                }
+                                            </div>
+                                        </details>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-success fw-semibold">Completed</span>
+                                    }
+                                </td>
+                                <td class="text-end fw-semibold">@customer.PendingAmount.ToString("C0", currencyCulture)</td>
+                                <td class="text-end pe-3 pe-lg-4">
+                                    <form asp-controller="EMICollection" asp-action="SearchLoan" method="post">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="LoanAccountNo" value="@customer.LoanAccountNo" />
+                                        <button type="submit" class="btn btn-primary btn-sm">Collect EMI</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        }
+                         <tr id="dashboardSearchEmpty" hidden>
+                             <td colspan="9" class="text-center text-secondary py-4">
+                                 No matching customer found.
+                             </td>
+                         </tr>
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
+            <div class="dashboard-empty-state">
+                <div class="dashboard-empty-icon">₹</div>
+                <div>
+                    <h3 class="h6 mb-1">
+                        @(string.IsNullOrWhiteSpace(Model.SearchTerm)
+                            ? "No active EMI accounts found"
+                            : "No matching customer found")
+                    </h3>
+                    <p class="small text-secondary mb-0">
+                        @(string.IsNullOrWhiteSpace(Model.SearchTerm)
+                            ? "Add a customer account to begin managing EMI collections."
+                            : "Try another customer name or clear the search.")
+                    </p>
+                </div>
+            </div>
+        }
+    </div>
+</section>
+
+@section Scripts {
+    <script>
+        (function () {
+            const searchInput = document.getElementById("dashboardCustomerSearch");
+            const loanRows = Array.from(document.querySelectorAll(".dashboard-table tbody tr[data-customer-name]"));
+            const emptyRow = document.getElementById("dashboardSearchEmpty");
+            const countBadge = document.getElementById("dashboardLoanCount");
+            const clearButton = document.getElementById("dashboardSearchClear");
+
+            if (!searchInput || !loanRows.length) {
+                return;
+            }
+
+            function filterLoans() {
+                const searchTerm = searchInput.value.trim().toLocaleLowerCase();
+                let visibleCount = 0;
+
+                loanRows.forEach(function (row) {
+                    const customerName = row.dataset.customerName.toLocaleLowerCase();
+                    const isMatch = !searchTerm || customerName.includes(searchTerm);
+
+                    row.hidden = !isMatch;
+                    if (isMatch) {
+                        visibleCount++;
+                    }
+                });
+
+                if (emptyRow) {
+                    emptyRow.hidden = visibleCount > 0;
+                }
+
+                if (countBadge) {
+                    countBadge.textContent = `${visibleCount} active loan${visibleCount === 1 ? "" : "s"}`;
+                }
+
+                if (clearButton) {
+                    clearButton.hidden = searchTerm.length === 0;
+                }
+            }
+
+            searchInput.addEventListener("input", filterLoans);
+            clearButton?.addEventListener("click", function () {
+                searchInput.value = "";
+                searchInput.focus();
+                filterLoans();
+            });
+            filterLoans();
+        })();
+
+    </script>
+}

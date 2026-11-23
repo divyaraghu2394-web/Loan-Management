@@ -1,0 +1,129 @@
+@model LoanManagement.Core.ViewModels.EMICollectionViewModel
+
+@{
+    ViewData["Title"] = "Loan Reports";
+}
+
+<div class="container mt-4 mb-5">
+    <div class="mb-4">
+        <h3 class="mb-1">Loan Reports</h3>
+        <p class="text-muted mb-0">Search one loan account to view its complete EMI collection history.</p>
+    </div>
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-header">
+            <strong>Search Customer Loan</strong>
+        </div>
+        <div class="card-body">
+            <form asp-controller="EMICollection" asp-action="Report" method="post">
+                @Html.AntiForgeryToken()
+                <div class="row g-3 align-items-end">
+                    <div class="col-12 col-md-8">
+                        <label asp-for="LoanAccountNo" class="form-label">Loan Account Number</label>
+                        <input asp-for="LoanAccountNo"
+                               class="form-control"
+                               placeholder="Enter loan account number"
+                               autocomplete="off" />
+                        <span asp-validation-for="LoanAccountNo" class="text-danger"></span>
+                    </div>
+                    <div class="col-12 col-md-4">
+                        <button type="submit" class="btn btn-primary w-100">View Full History</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    @if (Model.Customer != null)
+    {
+        <div class="card shadow-sm mb-4">
+            <div class="card-header">
+                <strong>Customer Loan Summary</strong>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <label class="text-muted">Loan Account Number</label>
+                        <div class="fw-bold">@Model.Customer.LoanAccountNo</div>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="text-muted">Customer Name</label>
+                        <div class="fw-bold">@Model.Customer.CustomerName</div>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="text-muted">Contact Number</label>
+                        <div class="fw-bold">@(string.IsNullOrWhiteSpace(Model.Customer.PrimaryContactNo) ? "-" : Model.Customer.PrimaryContactNo)</div>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="text-muted">Loan Amount</label>
+                        <div class="fw-bold">@Model.Customer.LoanAmount.ToString("N2")</div>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="text-muted">EMI Amount</label>
+                        <div class="fw-bold">@Model.Customer.EMIAmount.ToString("N2")</div>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="text-muted">Loan Status</label>
+                        <div class="fw-bold @(Model.IsLoanCompleted ? "text-success" : "text-primary")">
+                            @(Model.IsLoanCompleted ? "Closed / Fully Paid" : "Active")
+                        </div>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="text-muted">Total Installments</label>
+                        <div class="fw-bold">@Model.Customer.InstallmentCount</div>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="text-muted">Collected Installments</label>
+                        <div class="fw-bold text-success">@Model.CollectedInstallments</div>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="text-muted">Remaining Installments</label>
+                        <div class="fw-bold @(Model.RemainingInstallments == 0 ? "text-success" : "text-danger")">@Model.RemainingInstallments</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <strong>Complete EMI Collection History</strong>
+            </div>
+            <div class="card-body">
+                @if (Model.Collections.Any())
+                {
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-striped align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Installment No.</th>
+                                    <th>EMI Amount</th>
+                                    <th>Penalty Amount</th>
+                                    <th>Total Amount</th>
+                                    <th>Collection Date</th>
+                                    <th>Collected By</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var item in Model.Collections)
+                                {
+                                    <tr>
+                                        <td>@item.InstallmentNumber</td>
+                                        <td>@item.EMIAmount.ToString("N2")</td>
+                                        <td>@item.PenaltyAmount.ToString("N2")</td>
+                                        <td>@item.TotalAmount?.ToString("N2")</td>
+                                        <td>@item.CollectionDate.ToString("dd-MMM-yyyy")</td>
+                                        <td>@item.CreatedBy</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <p class="text-muted mb-0">No EMI collections recorded for this loan.</p>
+                }
+            </div>
+        </div>
+    }
+</div>
