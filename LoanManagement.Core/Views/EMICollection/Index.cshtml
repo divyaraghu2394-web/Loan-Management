@@ -227,8 +227,10 @@
 
                     <div class="col-md-4 mb-3">
                         <label class="text-muted">Loan Status</label>
-                        <div class="fw-bold @(Model.IsLoanCompleted ? "text-success" : "text-primary")">
-                            @(Model.IsLoanCompleted ? "Closed / Fully Paid" : "Active")
+                        <div>
+                            <span class="badge @(Model.IsLoanCompleted ? "bg-success" : "bg-primary")">
+                                @(Model.IsLoanCompleted ? "Closed / Fully Paid" : "Active")
+                            </span>
                         </div>
                     </div>
 
@@ -249,6 +251,27 @@
                                 ? "No further installment is due"
                                 : "Next collection to be recorded")
                         </small>
+                    </div>
+
+                    <div class="col-md-4 mb-3">
+                        <label class="text-muted">Total Collected</label>
+                        <div class="fw-bold text-success">
+                            @Model.TotalCollectedAmount.ToString("N2")
+                        </div>
+                    </div>
+
+                    <div class="col-md-4 mb-3">
+                        <label class="text-muted">Total Penalty Collected</label>
+                        <div class="fw-bold">
+                            @Model.TotalPenaltyCollected.ToString("N2")
+                        </div>
+                    </div>
+
+                    <div class="col-md-4 mb-3">
+                        <label class="text-muted">Outstanding Amount</label>
+                        <div class="fw-bold @(Model.OutstandingAmount == 0 ? "text-success" : "text-danger")">
+                            @Model.OutstandingAmount.ToString("N2")
+                        </div>
                     </div>
 
                 </div>
@@ -289,7 +312,7 @@
                             </div>
                             <div class="col-12 col-md-3">
                                 <label asp-for="CollectionDate" class="form-label"></label>
-                                <input asp-for="CollectionDate" type="date" class="form-control" />
+                                <input asp-for="CollectionDate" type="date" max="@DateTime.Today.ToString("yyyy-MM-dd")" class="form-control" />
                                 <small class="emi-field-note">&nbsp;</small>
                             </div>
                             <div class="col-12 col-md-3">
@@ -302,6 +325,27 @@
                                 </small>
                             </div>
                             <div class="col-12 col-md-2">
+                                <label asp-for="PaymentMode" class="form-label"></label>
+                                <select asp-for="PaymentMode" class="form-select">
+                                    <option value="Cash">Cash</option>
+                                    <option value="UPI">UPI</option>
+                                    <option value="Bank Transfer">Bank Transfer</option>
+                                    <option value="Cheque">Cheque</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                                <small class="emi-field-note">Reference is required for non-cash payments.</small>
+                            </div>
+                            <div class="col-12 col-md-2">
+                                <label asp-for="PaymentReference" class="form-label"></label>
+                                <input asp-for="PaymentReference" class="form-control" maxlength="100" />
+                                <small class="emi-field-note">UPI/transaction/cheque number</small>
+                            </div>
+                            <div class="col-12 col-md-2">
+                                <label asp-for="Remarks" class="form-label"></label>
+                                <input asp-for="Remarks" class="form-control" maxlength="500" />
+                                <small class="emi-field-note">Optional</small>
+                            </div>
+                            <div class="col-12 col-md-1">
                                 <label class="form-label invisible" aria-hidden="true">Action</label>
                                 <button type="submit" class="btn btn-primary w-100">Collect EMI</button>
                             </div>
@@ -335,6 +379,8 @@
                                     <th>Total Amount</th>
                                     <th>Collection Date</th>
                                     <th>Collected By</th>
+                                    <th>Receipt</th>
+                                    <th>Payment</th>
                                     <th>Action</th>
                                 </tr>
                             </thead>
@@ -349,22 +395,31 @@
                                         <td>@item.TotalAmount?.ToString("N2")</td>
                                         <td>@item.CollectionDate.ToString("dd-MMM-yyyy")</td>
                                         <td>@item.CreatedBy</td>
+                                        <td>@(item.ReceiptNumber ?? "-")</td>
                                         <td>
-                                            @if (!Model.IsLoanCompleted)
+                                            @item.PaymentMode
+                                            @if (!string.IsNullOrWhiteSpace(item.PaymentReference))
+                                            {
+                                                <small class="d-block text-muted">@item.PaymentReference</small>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (!item.IsReversed)
                                             {
                                                 <form asp-controller="EMICollection"
-                                                      asp-action="Delete"
+                                                      asp-action="Reverse"
                                                       method="post"
-                                                      onsubmit="return confirm('Delete this installment collection?');">
+                                                      onsubmit="return reverseCollection(this);">
                                                     @Html.AntiForgeryToken()
                                                     <input type="hidden" name="collectionId" value="@item.CollectionId" />
                                                     <input type="hidden" name="loanAccountNo" value="@Model.LoanAccountNo" />
-                                                    <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                                                    <input type="hidden" name="reason" />
+                                                    <button type="submit" class="btn btn-sm btn-outline-warning">Reverse</button>
                                                 </form>
                                             }
                                             else
                                             {
-                                                <span class="text-muted">Locked</span>
+                                                <span class="text-muted">Reversed</span>
                                             }
                                         </td>
                                     </tr>
@@ -374,6 +429,20 @@
                         </table>
 
                     </div>
+
+@section Scripts {
+    <script>
+        function reverseCollection(form) {
+            const reason = window.prompt('Enter the reason for reversing this collection:');
+            if (!reason || !reason.trim()) {
+                return false;
+            }
+
+            form.querySelector('input[name="reason"]').value = reason.trim();
+            return window.confirm('Reverse this collection? The original record will remain in the audit history.');
+        }
+    </script>
+}
                 }
                 else
                 {

@@ -39,9 +39,30 @@ namespace LoanManagement.Core.ViewModels
         [Display(Name = "Penalty per installment")]
         public decimal? PenaltyAmount { get; set; }
 
+        [Required]
+        [Display(Name = "Payment mode")]
+        public string PaymentMode { get; set; } = "Cash";
+
+        [StringLength(100)]
+        [Display(Name = "Payment reference")]
+        public string? PaymentReference { get; set; }
+
+        [StringLength(500)]
+        public string? Remarks { get; set; }
+
         public decimal SuggestedPenaltyAmount { get; set; }
 
         public bool IsPenaltyApplicable { get; set; }
+
+        public decimal TotalCollectedAmount { get; set; }
+
+        public decimal TotalPenaltyCollected { get; set; }
+
+        public decimal OutstandingAmount { get; set; }
+
+        public int DaysOverdue { get; set; }
+
+        public string CollectionStatus { get; set; } = "Active";
 
         [Required(ErrorMessage = "Collection date is required.")]
         [Display(Name = "Collection Date")]

@@ -54,6 +54,7 @@ namespace LoanManagement.Core.Controllers
                     CollectionDate = DateTime.Today
                 });
             }
+
         }
 
         [HttpGet]
@@ -124,11 +125,7 @@ namespace LoanManagement.Core.Controllers
             model.Collections = (await _emiCollectionRepository
                 .GetCollectionsByLoanAccountNoAsync(model.LoanAccountNo))
                 .ToList();
-            model.CollectedInstallments = model.Collections.Count();
-            model.RemainingInstallments = Math.Max(
-                0,
-                model.Customer.InstallmentCount - model.CollectedInstallments);
-            model.IsLoanCompleted = model.RemainingInstallments == 0;
+            ApplyCollectionSummary(model);
             model.NextInstallmentNumber = model.IsLoanCompleted
                 ? 0
                 : GetNextMissingInstallmentNumber(
@@ -244,9 +241,13 @@ namespace LoanManagement.Core.Controllers
                     .GetCollectionsByLoanAccountNoAsync(model.LoanAccountNo))
                     .ToList();
 
+                var activeCollections = collections
+                    .Where(x => !x.IsReversed)
+                    .ToList();
+
                 int remaining = Math.Max(
                     0,
-                    customer.InstallmentCount - collections.Count);
+                    customer.InstallmentCount - activeCollections.Count);
 
                 if (remaining == 0)
                 {
@@ -274,9 +275,49 @@ namespace LoanManagement.Core.Controllers
                     ? DateTime.Today
                     : model.CollectionDate.Date;
 
-                bool penaltyApplicable = IsPenaltyApplicable(collectionDate);
-                decimal suggestedPenalty = _emiService
-                    .GetSuggestedPenalty(customer.LoanAmount);
+                if (collectionDate > DateTime.Today)
+                {
+                    TempData["ErrorMessage"] =
+                        "Collection date cannot be in the future.";
+                    return RedirectToAction(nameof(SearchLoan), new
+                    {
+                        LoanAccountNo = customer.LoanAccountNo
+                    });
+                }
+
+                if (model.PenaltyAmount.HasValue && model.PenaltyAmount.Value < 0)
+                {
+                    TempData["ErrorMessage"] =
+                        "Penalty amount cannot be negative.";
+                    return RedirectToAction(nameof(SearchLoan), new
+                    {
+                        LoanAccountNo = customer.LoanAccountNo
+                    });
+                }
+
+                string[] paymentModes =
+                    ["Cash", "UPI", "Bank Transfer", "Cheque", "Other"];
+
+                if (!paymentModes.Contains(model.PaymentMode, StringComparer.OrdinalIgnoreCase))
+                {
+                    TempData["ErrorMessage"] = "Select a valid payment mode.";
+                    return RedirectToAction(nameof(SearchLoan), new
+                    {
+                        LoanAccountNo = customer.LoanAccountNo
+                    });
+                }
+
+                if (!string.Equals(model.PaymentMode, "Cash", StringComparison.OrdinalIgnoreCase) &&
+                    string.IsNullOrWhiteSpace(model.PaymentReference))
+                {
+                    TempData["ErrorMessage"] =
+                        "Payment reference is required for non-cash payments.";
+                    return RedirectToAction(nameof(SearchLoan), new
+                    {
+                        LoanAccountNo = customer.LoanAccountNo
+                    });
+                }
+
                 decimal penalty = model.PenaltyAmount.GetValueOrDefault() > 0
                     ? model.PenaltyAmount.GetValueOrDefault()
                     : 0;
@@ -289,7 +330,10 @@ namespace LoanManagement.Core.Controllers
                         PenaltyAmount = penalty,
                         CollectionDate = collectionDate,
                         CreatedBy = User.Identity?.Name ?? "Admin",
-                        CreatedOn = DateTime.UtcNow
+                        CreatedOn = DateTime.UtcNow,
+                        PaymentMode = model.PaymentMode,
+                        PaymentReference = model.PaymentReference?.Trim(),
+                        Remarks = model.Remarks?.Trim()
                     },
                     model.InstallmentsToCollect);
 
@@ -312,8 +356,20 @@ namespace LoanManagement.Core.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Delete(long collectionId, string loanAccountNo)
+        public async Task<IActionResult> Reverse(
+            long collectionId,
+            string loanAccountNo,
+            string reason)
         {
+            if (string.IsNullOrWhiteSpace(reason))
+            {
+                TempData["ErrorMessage"] = "A reversal reason is required.";
+                return RedirectToAction(nameof(SearchLoan), new
+                {
+                    LoanAccountNo = loanAccountNo
+                });
+            }
+
             var customer = await _emiCollectionRepository
                 .GetCustomerLoanDetailsAsync(loanAccountNo?.Trim() ?? string.Empty);
 
@@ -326,23 +382,14 @@ namespace LoanManagement.Core.Controllers
             var collections = await _emiCollectionRepository
                 .GetCollectionsByLoanAccountNoAsync(customer.LoanAccountNo);
 
-            if (collections.Count() >= customer.InstallmentCount)
-            {
-                TempData["ErrorMessage"] =
-                    "This loan is fully paid. Completed EMI records cannot be deleted from this screen.";
+            bool reversed = await _emiCollectionRepository.ReverseCollectionAsync(
+                collectionId,
+                reason.Trim(),
+                User.Identity?.Name ?? "Admin");
 
-                return RedirectToAction(nameof(SearchLoan), new
-                {
-                    LoanAccountNo = customer.LoanAccountNo
-                });
-            }
-
-            bool deleted = await _emiCollectionRepository
-                .DeleteCollectionAsync(collectionId);
-
-            TempData[deleted ? "SuccessMessage" : "ErrorMessage"] = deleted
-                ? "Collection record deleted successfully."
-                : "Collection record was not found.";
+            TempData[reversed ? "SuccessMessage" : "ErrorMessage"] = reversed
+                ? "Collection record reversed successfully. The original record remains in the audit history."
+                : "Collection record was not found or was already reversed.";
 
             return RedirectToAction(nameof(SearchLoan), new
             {
@@ -376,6 +423,32 @@ namespace LoanManagement.Core.Controllers
             }
 
             return 0;
+        }
+
+        private static void ApplyCollectionSummary(EMICollectionViewModel model)
+        {
+            if (model.Customer == null)
+                return;
+
+            var collections = model.Collections.ToList();
+
+            var activeCollections = collections
+                .Where(x => !x.IsReversed)
+                .ToList();
+
+            model.CollectedInstallments = activeCollections.Count;
+            model.RemainingInstallments = Math.Max(
+                0,
+                model.Customer.InstallmentCount - model.CollectedInstallments);
+            model.TotalCollectedAmount = activeCollections.Sum(x => x.TotalAmount ??
+                (x.EMIAmount + x.PenaltyAmount));
+            model.TotalPenaltyCollected = activeCollections.Sum(x => x.PenaltyAmount);
+            model.OutstandingAmount = model.Customer.EMIAmount *
+                model.RemainingInstallments;
+            model.IsLoanCompleted = model.RemainingInstallments == 0;
+            model.CollectionStatus = model.IsLoanCompleted
+                ? "Fully Paid"
+                : "Active";
         }
     }
 }

@@ -64,8 +64,10 @@
                     </div>
                     <div class="col-md-4 mb-3">
                         <label class="text-muted">Loan Status</label>
-                        <div class="fw-bold @(Model.IsLoanCompleted ? "text-success" : "text-primary")">
-                            @(Model.IsLoanCompleted ? "Closed / Fully Paid" : "Active")
+                        <div>
+                            <span class="badge @(Model.IsLoanCompleted ? "bg-success" : "bg-primary")">
+                                @(Model.IsLoanCompleted ? "Closed / Fully Paid" : "Active")
+                            </span>
                         </div>
                     </div>
                     <div class="col-md-4 mb-3">
@@ -79,6 +81,18 @@
                     <div class="col-md-4 mb-3">
                         <label class="text-muted">Remaining Installments</label>
                         <div class="fw-bold @(Model.RemainingInstallments == 0 ? "text-success" : "text-danger")">@Model.RemainingInstallments</div>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="text-muted">Total Collected</label>
+                        <div class="fw-bold text-success">@Model.TotalCollectedAmount.ToString("N2")</div>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="text-muted">Total Penalty Collected</label>
+                        <div class="fw-bold">@Model.TotalPenaltyCollected.ToString("N2")</div>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="text-muted">Outstanding Amount</label>
+                        <div class="fw-bold @(Model.OutstandingAmount == 0 ? "text-success" : "text-danger")">@Model.OutstandingAmount.ToString("N2")</div>
                     </div>
                 </div>
             </div>
@@ -101,6 +115,9 @@
                                     <th>Total Amount</th>
                                     <th>Collection Date</th>
                                     <th>Collected By</th>
+                                    <th>Receipt</th>
+                                    <th>Payment</th>
+                                    <th>Status</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -113,6 +130,25 @@
                                         <td>@item.TotalAmount?.ToString("N2")</td>
                                         <td>@item.CollectionDate.ToString("dd-MMM-yyyy")</td>
                                         <td>@item.CreatedBy</td>
+                                        <td>@(item.ReceiptNumber ?? "-")</td>
+                                        <td>
+                                            @item.PaymentMode
+                                            @if (!string.IsNullOrWhiteSpace(item.PaymentReference))
+                                            {
+                                                <small class="d-block text-muted">@item.PaymentReference</small>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (item.IsReversed)
+                                            {
+                                                <span class="badge bg-warning text-dark">Reversed</span>
+                                                <small class="d-block text-muted">@item.ReversalReason</small>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-success">Posted</span>
+                                            }
+                                        </td>
                                     </tr>
                                 }
                             </tbody>

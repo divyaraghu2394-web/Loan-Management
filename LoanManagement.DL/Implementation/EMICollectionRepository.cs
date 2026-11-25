@@ -148,6 +148,7 @@ namespace LoanManagement.DL.Implementation
                     ON C.LoanAccountNo = E.LoanAccountNo
                 WHERE E.CollectionDate >= @CollectionDate
                   AND E.CollectionDate < DATEADD(day, 1, @CollectionDate)
+                  AND E.IsReversed = 0
                 ORDER BY E.CollectionDate DESC, E.CollectionId DESC;";
 
             using var connection = _connectionFactory.CreateConnection();
@@ -171,7 +172,11 @@ namespace LoanManagement.DL.Implementation
                     CollectionDate,
                     CreatedBy,
                     CreatedOn,
-                    InstallmentNumber
+                    InstallmentNumber,
+                    ReceiptNumber,
+                    PaymentMode,
+                    PaymentReference,
+                    Remarks
                 FROM EMICollections
                 WHERE LoanAccountNo = @LoanAccountNo
                 ORDER BY InstallmentNumber;";
@@ -218,6 +223,7 @@ namespace LoanManagement.DL.Implementation
 
                 LEFT JOIN EMICollections E
                     ON C.LoanAccountNo = E.LoanAccountNo
+                   AND E.IsReversed = 0
 
                 WHERE C.LoanAccountNo = @LoanAccountNo
                   AND C.IsLive = 1
@@ -256,13 +262,15 @@ namespace LoanManagement.DL.Implementation
             const string collectedInstallmentsSql = @"
                 SELECT InstallmentNumber
                 FROM EMICollections WITH (UPDLOCK, HOLDLOCK)
-                WHERE LoanAccountNo = @LoanAccountNo;";
+                WHERE LoanAccountNo = @LoanAccountNo
+                  AND IsReversed = 0;";
 
             const string remainingSql = @"
                 SELECT C.InstallmentCount - COUNT(E.CollectionId)
                 FROM Customers C
                 LEFT JOIN EMICollections E
                     ON C.LoanAccountNo = E.LoanAccountNo
+                   AND E.IsReversed = 0
                 WHERE C.LoanAccountNo = @LoanAccountNo
                 GROUP BY C.InstallmentCount;";
 
@@ -275,7 +283,11 @@ namespace LoanManagement.DL.Implementation
                     CollectionDate,
                     CreatedBy,
                     CreatedOn,
-                    InstallmentNumber
+                    InstallmentNumber,
+                    ReceiptNumber,
+                    PaymentMode,
+                    PaymentReference,
+                    Remarks
                 )
                 VALUES
                 (
@@ -285,7 +297,11 @@ namespace LoanManagement.DL.Implementation
                     @CollectionDate,
                     @CreatedBy,
                     @CreatedOn,
-                    @InstallmentNumber
+                    @InstallmentNumber,
+                    @ReceiptNumber,
+                    @PaymentMode,
+                    @PaymentReference,
+                    @Remarks
                 );";
 
             using var connection = _connectionFactory.CreateConnection();
@@ -318,6 +334,14 @@ namespace LoanManagement.DL.Implementation
 
                 int rowsAffected = 0;
 
+                const string receiptSql = @"
+                    SELECT 'RCT-' + CONVERT(VARCHAR(8), GETDATE(), 112) + '-' +
+                        RIGHT('000000' + CONVERT(VARCHAR(20), NEXT VALUE FOR dbo.Seq_EMIReceiptNo), 6);";
+
+                string receiptNumber = await connection.ExecuteScalarAsync<string>(
+                    receiptSql,
+                    transaction: transaction);
+
                 for (int offset = 0; offset < installmentCount; offset++)
                 {
                     var item = new
@@ -328,7 +352,11 @@ namespace LoanManagement.DL.Implementation
                         collection.CollectionDate,
                         collection.CreatedBy,
                         collection.CreatedOn,
-                        InstallmentNumber = nextInstallments[offset]
+                        InstallmentNumber = nextInstallments[offset],
+                        ReceiptNumber = receiptNumber + "-" + (offset + 1),
+                        collection.PaymentMode,
+                        collection.PaymentReference,
+                        collection.Remarks
                     };
 
                     rowsAffected += await connection.ExecuteAsync(
@@ -347,16 +375,31 @@ namespace LoanManagement.DL.Implementation
             }
         }
 
-        public async Task<bool> DeleteCollectionAsync(long collectionId)
+        public async Task<bool> ReverseCollectionAsync(
+            long collectionId,
+            string reason,
+            string reversedBy)
         {
             const string sql = @"
-                DELETE FROM EMICollections
-                WHERE CollectionId = @CollectionId;";
+                UPDATE EMICollections
+                SET IsReversed = 1,
+                    ReversalReason = @Reason,
+                    ReversedBy = @ReversedBy,
+                    ReversedOn = SYSDATETIME(),
+                    ModifiedBy = @ReversedBy,
+                    ModifiedOn = SYSDATETIME()
+                WHERE CollectionId = @CollectionId
+                  AND IsReversed = 0;";
 
             using var connection = _connectionFactory.CreateConnection();
             int rowsAffected = await connection.ExecuteAsync(
                 sql,
-                new { CollectionId = collectionId });
+                new
+                {
+                    CollectionId = collectionId,
+                    Reason = reason,
+                    ReversedBy = reversedBy
+                });
 
             return rowsAffected > 0;
         }

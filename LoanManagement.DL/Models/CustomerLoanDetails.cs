@@ -35,5 +35,9 @@ namespace LoanManagement.DL.Models
         public int RemainingInstallments { get; set; }
 
         public decimal PendingAmount { get; set; }
+
+        public int DaysOverdue { get; set; }
+
+        public string CollectionStatus { get; set; } = "Active";
     }
 }

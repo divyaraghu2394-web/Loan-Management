@@ -30,6 +30,9 @@ namespace LoanManagement.DL.Interfaces
             EMICollection collection,
             int installmentCount);
 
-        Task<bool> DeleteCollectionAsync(long collectionId);
+        Task<bool> ReverseCollectionAsync(
+            long collectionId,
+            string reason,
+            string reversedBy);
     }
 }
