@@ -138,7 +138,7 @@
                                                        value="@customer.LoanAccountNo" />
 
                                                 <button type="submit"
-                                                        class="btn btn-primary btn-sm">
+                                                        class="btn btn-primary btn-sm text-nowrap">
                                                     Collect EMI
                                                 </button>
 
@@ -335,19 +335,20 @@
                                 </select>
                                 <small class="emi-field-note">Reference is required for non-cash payments.</small>
                             </div>
-                            <div class="col-12 col-md-2">
+                            <div class="col-12 col-md-4">
                                 <label asp-for="PaymentReference" class="form-label"></label>
                                 <input asp-for="PaymentReference" class="form-control" maxlength="100" />
                                 <small class="emi-field-note">UPI/transaction/cheque number</small>
                             </div>
-                            <div class="col-12 col-md-2">
+                            <div class="col-12 col-md-5">
                                 <label asp-for="Remarks" class="form-label"></label>
                                 <input asp-for="Remarks" class="form-control" maxlength="500" />
                                 <small class="emi-field-note">Optional</small>
                             </div>
-                            <div class="col-12 col-md-1">
+                            <div class="col-12 col-md-3">
                                 <label class="form-label invisible" aria-hidden="true">Action</label>
-                                <button type="submit" class="btn btn-primary w-100">Collect EMI</button>
+                                <button type="submit" class="btn btn-primary w-100 text-nowrap">Collect EMI</button>
+                                <small class="emi-field-note">&nbsp;</small>
                             </div>
                         </div>
                     </form>
@@ -365,7 +366,15 @@
 
             <div class="card-body">
 
-                @if (Model.Collections.Any())
+                @{
+                    var collectionEntries = Model.Collections
+                        .Where(x => !x.IsReversalEntry)
+                        .OrderBy(x => x.InstallmentNumber)
+                        .ThenBy(x => x.CollectionId)
+                        .ToList();
+                }
+
+                @if (collectionEntries.Any())
                 {
                     <div class="table-responsive">
 
@@ -386,13 +395,15 @@
                             </thead>
 
                             <tbody>
-                                @foreach (var item in Model.Collections)
+                                @foreach (var item in collectionEntries)
                                 {
-                                    <tr>
+                                    var rowClass = item.IsReversed ? "text-muted" : string.Empty;
+                                    var amountClass = item.IsReversed ? "text-decoration-line-through" : string.Empty;
+                                    <tr class="@rowClass">
                                         <td>@item.InstallmentNumber</td>
-                                        <td>@item.EMIAmount.ToString("N2")</td>
-                                        <td>@item.PenaltyAmount.ToString("N2")</td>
-                                        <td>@item.TotalAmount?.ToString("N2")</td>
+                                        <td class="@amountClass">@item.EMIAmount.ToString("N2")</td>
+                                        <td class="@amountClass">@item.PenaltyAmount.ToString("N2")</td>
+                                        <td class="@amountClass">@item.TotalAmount?.ToString("N2")</td>
                                         <td>@item.CollectionDate.ToString("dd-MMM-yyyy")</td>
                                         <td>@item.CreatedBy</td>
                                         <td>@(item.ReceiptNumber ?? "-")</td>
@@ -404,7 +415,24 @@
                                             }
                                         </td>
                                         <td>
-                                            @if (!item.IsReversed)
+                                            @if (item.IsReversed)
+                                            {
+                                                <span class="badge bg-warning text-dark">Reversed</span>
+                                                @if (!string.IsNullOrWhiteSpace(item.ReversalReason))
+                                                {
+                                                    <small class="d-block text-muted">@item.ReversalReason</small>
+                                                }
+                                            }
+                                            else if (Model.IsLoanCompleted || !Model.Customer.IsLive)
+                                            {
+                                                <button type="button"
+                                                        class="btn btn-sm btn-outline-warning text-nowrap"
+                                                        disabled
+                                                        title="Reversal is disabled for closed loans.">
+                                                    Reverse
+                                                </button>
+                                            }
+                                            else
                                             {
                                                 <form asp-controller="EMICollection"
                                                       asp-action="Reverse"
@@ -414,12 +442,8 @@
                                                     <input type="hidden" name="collectionId" value="@item.CollectionId" />
                                                     <input type="hidden" name="loanAccountNo" value="@Model.LoanAccountNo" />
                                                     <input type="hidden" name="reason" />
-                                                    <button type="submit" class="btn btn-sm btn-outline-warning">Reverse</button>
+                                                    <button type="submit" class="btn btn-sm btn-outline-warning text-nowrap">Reverse</button>
                                                 </form>
-                                            }
-                                            else
-                                            {
-                                                <span class="text-muted">Reversed</span>
                                             }
                                         </td>
                                     </tr>

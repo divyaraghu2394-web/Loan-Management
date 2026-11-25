@@ -92,11 +92,7 @@ namespace LoanManagement.Core.Controllers
             model.Collections = (await _emiCollectionRepository
                 .GetCollectionsByLoanAccountNoAsync(model.LoanAccountNo))
                 .ToList();
-            model.CollectedInstallments = model.Collections.Count();
-            model.RemainingInstallments = Math.Max(
-                0,
-                model.Customer.InstallmentCount - model.CollectedInstallments);
-            model.IsLoanCompleted = model.RemainingInstallments == 0;
+            ApplyCollectionSummary(model);
 
             return View(model);
         }
@@ -129,7 +125,7 @@ namespace LoanManagement.Core.Controllers
             model.NextInstallmentNumber = model.IsLoanCompleted
                 ? 0
                 : GetNextMissingInstallmentNumber(
-                    model.Collections,
+                    model.Collections.Where(x => !x.IsReversalEntry && !x.IsReversed),
                     model.Customer.InstallmentCount);
             model.InstallmentsToCollect = 1;
             model.SuggestedPenaltyAmount = _emiService
@@ -178,21 +174,11 @@ namespace LoanManagement.Core.Controllers
                             model.LoanAccountNo);
 
                 model.Collections = collections.ToList();
-
-                model.CollectedInstallments =
-                    model.Collections.Count();
-
-                model.RemainingInstallments =
-                    Math.Max(
-                        0,
-                        model.Customer.InstallmentCount -
-                        model.CollectedInstallments);
-
-                model.IsLoanCompleted = model.RemainingInstallments == 0;
+                ApplyCollectionSummary(model);
                 model.NextInstallmentNumber = model.IsLoanCompleted
                     ? 0
                     : GetNextMissingInstallmentNumber(
-                        model.Collections,
+                        model.Collections.Where(x => !x.IsReversalEntry && !x.IsReversed),
                         model.Customer.InstallmentCount);
 
                 model.InstallmentsToCollect = 1;
@@ -242,7 +228,7 @@ namespace LoanManagement.Core.Controllers
                     .ToList();
 
                 var activeCollections = collections
-                    .Where(x => !x.IsReversed)
+                    .Where(x => !x.IsReversalEntry && !x.IsReversed)
                     .ToList();
 
                 int remaining = Math.Max(
@@ -379,8 +365,34 @@ namespace LoanManagement.Core.Controllers
                 return RedirectToAction(nameof(Index));
             }
 
-            var collections = await _emiCollectionRepository
-                .GetCollectionsByLoanAccountNoAsync(customer.LoanAccountNo);
+            var collections = (await _emiCollectionRepository
+                .GetCollectionsByLoanAccountNoAsync(customer.LoanAccountNo))
+                .ToList();
+
+            int activeCollectionCount = collections.Count(x => !x.IsReversalEntry && !x.IsReversed);
+            bool isLoanClosed = !customer.IsLive ||
+                activeCollectionCount >= customer.InstallmentCount;
+
+            if (isLoanClosed)
+            {
+                TempData["ErrorMessage"] =
+                    "Collections cannot be reversed for a closed loan.";
+                return RedirectToAction(nameof(SearchLoan), new
+                {
+                    LoanAccountNo = customer.LoanAccountNo
+                });
+            }
+
+            var targetCollection = collections.FirstOrDefault(x => x.CollectionId == collectionId);
+            if (targetCollection == null || targetCollection.IsReversalEntry || targetCollection.IsReversed)
+            {
+                TempData["ErrorMessage"] =
+                    "Only an active collection entry can be reversed.";
+                return RedirectToAction(nameof(SearchLoan), new
+                {
+                    LoanAccountNo = customer.LoanAccountNo
+                });
+            }
 
             bool reversed = await _emiCollectionRepository.ReverseCollectionAsync(
                 collectionId,
@@ -388,7 +400,7 @@ namespace LoanManagement.Core.Controllers
                 User.Identity?.Name ?? "Admin");
 
             TempData[reversed ? "SuccessMessage" : "ErrorMessage"] = reversed
-                ? "Collection record reversed successfully. The original record remains in the audit history."
+                ? "Collection reversed successfully. A contra reversal entry has been posted to the ledger."
                 : "Collection record was not found or was already reversed.";
 
             return RedirectToAction(nameof(SearchLoan), new
@@ -433,16 +445,16 @@ namespace LoanManagement.Core.Controllers
             var collections = model.Collections.ToList();
 
             var activeCollections = collections
-                .Where(x => !x.IsReversed)
+                .Where(x => !x.IsReversalEntry && !x.IsReversed)
                 .ToList();
 
             model.CollectedInstallments = activeCollections.Count;
             model.RemainingInstallments = Math.Max(
                 0,
                 model.Customer.InstallmentCount - model.CollectedInstallments);
-            model.TotalCollectedAmount = activeCollections.Sum(x => x.TotalAmount ??
+            model.TotalCollectedAmount = collections.Sum(x => x.TotalAmount ??
                 (x.EMIAmount + x.PenaltyAmount));
-            model.TotalPenaltyCollected = activeCollections.Sum(x => x.PenaltyAmount);
+            model.TotalPenaltyCollected = collections.Sum(x => x.PenaltyAmount);
             model.OutstandingAmount = model.Customer.EMIAmount *
                 model.RemainingInstallments;
             model.IsLoanCompleted = model.RemainingInstallments == 0;

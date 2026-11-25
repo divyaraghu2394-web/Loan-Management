@@ -103,7 +103,18 @@
                 <strong>Complete EMI Collection History</strong>
             </div>
             <div class="card-body">
-                @if (Model.Collections.Any())
+                @{
+                    var collectionEntries = Model.Collections
+                        .Where(x => !x.IsReversalEntry)
+                        .OrderBy(x => x.InstallmentNumber)
+                        .ThenBy(x => x.CollectionId)
+                        .ToList();
+                    var reversalByParentId = Model.Collections
+                        .Where(x => x.IsReversalEntry && x.ParentCollectionId.HasValue)
+                        .ToDictionary(x => x.ParentCollectionId!.Value);
+                }
+
+                @if (collectionEntries.Any())
                 {
                     <div class="table-responsive">
                         <table class="table table-bordered table-striped align-middle mb-0">
@@ -121,16 +132,25 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                @foreach (var item in Model.Collections)
+                                @foreach (var item in collectionEntries)
                                 {
-                                    <tr>
+                                    var rowClass = item.IsReversed ? "text-muted" : string.Empty;
+                                    var amountClass = item.IsReversed ? "text-decoration-line-through" : string.Empty;
+                                    reversalByParentId.TryGetValue(item.CollectionId, out var reversalEntry);
+                                    <tr class="@rowClass">
                                         <td>@item.InstallmentNumber</td>
-                                        <td>@item.EMIAmount.ToString("N2")</td>
-                                        <td>@item.PenaltyAmount.ToString("N2")</td>
-                                        <td>@item.TotalAmount?.ToString("N2")</td>
+                                        <td class="@amountClass">@item.EMIAmount.ToString("N2")</td>
+                                        <td class="@amountClass">@item.PenaltyAmount.ToString("N2")</td>
+                                        <td class="@amountClass">@item.TotalAmount?.ToString("N2")</td>
                                         <td>@item.CollectionDate.ToString("dd-MMM-yyyy")</td>
                                         <td>@item.CreatedBy</td>
-                                        <td>@(item.ReceiptNumber ?? "-")</td>
+                                        <td>
+                                            @(item.ReceiptNumber ?? "-")
+                                            @if (reversalEntry != null && !string.IsNullOrWhiteSpace(reversalEntry.ReceiptNumber))
+                                            {
+                                                <small class="d-block text-danger">@reversalEntry.ReceiptNumber</small>
+                                            }
+                                        </td>
                                         <td>
                                             @item.PaymentMode
                                             @if (!string.IsNullOrWhiteSpace(item.PaymentReference))
@@ -142,11 +162,18 @@
                                             @if (item.IsReversed)
                                             {
                                                 <span class="badge bg-warning text-dark">Reversed</span>
-                                                <small class="d-block text-muted">@item.ReversalReason</small>
+                                                @if (!string.IsNullOrWhiteSpace(item.ReversalReason))
+                                                {
+                                                    <small class="d-block text-muted">@item.ReversalReason</small>
+                                                }
+                                                @if (item.ReversedOn.HasValue)
+                                                {
+                                                    <small class="d-block text-muted">@item.ReversedOn.Value.ToString("dd-MMM-yyyy")</small>
+                                                }
                                             }
                                             else
                                             {
-                                                <span class="badge bg-success">Posted</span>
+                                                <span class="badge bg-success">Collected</span>
                                             }
                                         </td>
                                     </tr>

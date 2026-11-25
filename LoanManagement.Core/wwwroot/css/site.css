@@ -262,8 +262,13 @@ html {
 }
 
 .emi-collection-form .form-control,
-.emi-collection-form .form-select {
+.emi-collection-form .form-select,
+.emi-collection-form .btn {
     min-height: 44px;
+}
+
+.emi-collection-form .btn {
+    white-space: nowrap;
 }
 
 .emi-history-table th {

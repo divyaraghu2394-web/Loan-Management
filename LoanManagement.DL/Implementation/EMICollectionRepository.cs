@@ -52,6 +52,8 @@ namespace LoanManagement.DL.Implementation
 
                 LEFT JOIN EMICollections E
                     ON C.LoanAccountNo = E.LoanAccountNo
+                   AND E.IsReversed = 0
+                   AND E.EntryType = 'Collection'
 
                 WHERE C.IsLive = 1
                   AND (@CustomerName IS NULL
@@ -116,7 +118,7 @@ namespace LoanManagement.DL.Implementation
         {
             const string sql = @"
                 SELECT
-                    COUNT(*) AS CollectionCount,
+                    COUNT(CASE WHEN EntryType = 'Collection' AND IsReversed = 0 THEN 1 END) AS CollectionCount,
                     COALESCE(SUM(EMIAmount), 0) AS EMIAmount,
                     COALESCE(SUM(PenaltyAmount), 0) AS PenaltyAmount,
                     COALESCE(SUM(EMIAmount + PenaltyAmount), 0) AS TotalAmount
@@ -148,7 +150,6 @@ namespace LoanManagement.DL.Implementation
                     ON C.LoanAccountNo = E.LoanAccountNo
                 WHERE E.CollectionDate >= @CollectionDate
                   AND E.CollectionDate < DATEADD(day, 1, @CollectionDate)
-                  AND E.IsReversed = 0
                 ORDER BY E.CollectionDate DESC, E.CollectionId DESC;";
 
             using var connection = _connectionFactory.CreateConnection();
@@ -176,10 +177,16 @@ namespace LoanManagement.DL.Implementation
                     ReceiptNumber,
                     PaymentMode,
                     PaymentReference,
-                    Remarks
+                    Remarks,
+                    IsReversed,
+                    ReversalReason,
+                    ReversedBy,
+                    ReversedOn,
+                    EntryType,
+                    ParentCollectionId
                 FROM EMICollections
                 WHERE LoanAccountNo = @LoanAccountNo
-                ORDER BY InstallmentNumber;";
+                ORDER BY CollectionDate, CollectionId;";
 
             using var connection = _connectionFactory.CreateConnection();
 
@@ -224,6 +231,7 @@ namespace LoanManagement.DL.Implementation
                 LEFT JOIN EMICollections E
                     ON C.LoanAccountNo = E.LoanAccountNo
                    AND E.IsReversed = 0
+                   AND E.EntryType = 'Collection'
 
                 WHERE C.LoanAccountNo = @LoanAccountNo
                   AND C.IsLive = 1
@@ -263,7 +271,8 @@ namespace LoanManagement.DL.Implementation
                 SELECT InstallmentNumber
                 FROM EMICollections WITH (UPDLOCK, HOLDLOCK)
                 WHERE LoanAccountNo = @LoanAccountNo
-                  AND IsReversed = 0;";
+                  AND IsReversed = 0
+                  AND EntryType = 'Collection';";
 
             const string remainingSql = @"
                 SELECT C.InstallmentCount - COUNT(E.CollectionId)
@@ -271,6 +280,7 @@ namespace LoanManagement.DL.Implementation
                 LEFT JOIN EMICollections E
                     ON C.LoanAccountNo = E.LoanAccountNo
                    AND E.IsReversed = 0
+                   AND E.EntryType = 'Collection'
                 WHERE C.LoanAccountNo = @LoanAccountNo
                 GROUP BY C.InstallmentCount;";
 
@@ -287,7 +297,8 @@ namespace LoanManagement.DL.Implementation
                     ReceiptNumber,
                     PaymentMode,
                     PaymentReference,
-                    Remarks
+                    Remarks,
+                    EntryType
                 )
                 VALUES
                 (
@@ -301,7 +312,8 @@ namespace LoanManagement.DL.Implementation
                     @ReceiptNumber,
                     @PaymentMode,
                     @PaymentReference,
-                    @Remarks
+                    @Remarks,
+                    'Collection'
                 );";
 
             using var connection = _connectionFactory.CreateConnection();
@@ -324,7 +336,7 @@ namespace LoanManagement.DL.Implementation
                     transaction))
                     .ToHashSet();
 
-                var nextInstallments = Enumerable.Range(1, remaining + installmentCount)
+                var nextInstallments = Enumerable.Range(1, collectedInstallments.Count + remaining)
                     .Where(number => !collectedInstallments.Contains(number))
                     .Take(installmentCount)
                     .ToList();
@@ -380,7 +392,34 @@ namespace LoanManagement.DL.Implementation
             string reason,
             string reversedBy)
         {
-            const string sql = @"
+            const string selectOriginalSql = @"
+                SELECT
+                    CollectionId,
+                    LoanAccountNo,
+                    EMIAmount,
+                    PenaltyAmount,
+                    InstallmentNumber,
+                    ReceiptNumber,
+                    PaymentMode,
+                    PaymentReference
+                FROM EMICollections WITH (UPDLOCK, HOLDLOCK)
+                WHERE CollectionId = @CollectionId
+                  AND EntryType = 'Collection'
+                  AND IsReversed = 0;";
+
+            const string loanStatusSql = @"
+                SELECT
+                    C.IsLive,
+                    C.InstallmentCount - COUNT(E.CollectionId) AS RemainingInstallments
+                FROM Customers C
+                LEFT JOIN EMICollections E
+                    ON C.LoanAccountNo = E.LoanAccountNo
+                   AND E.IsReversed = 0
+                   AND E.EntryType = 'Collection'
+                WHERE C.LoanAccountNo = @LoanAccountNo
+                GROUP BY C.IsLive, C.InstallmentCount;";
+
+            const string markReversedSql = @"
                 UPDATE EMICollections
                 SET IsReversed = 1,
                     ReversalReason = @Reason,
@@ -389,19 +428,124 @@ namespace LoanManagement.DL.Implementation
                     ModifiedBy = @ReversedBy,
                     ModifiedOn = SYSDATETIME()
                 WHERE CollectionId = @CollectionId
+                  AND EntryType = 'Collection'
                   AND IsReversed = 0;";
 
-            using var connection = _connectionFactory.CreateConnection();
-            int rowsAffected = await connection.ExecuteAsync(
-                sql,
-                new
-                {
-                    CollectionId = collectionId,
-                    Reason = reason,
-                    ReversedBy = reversedBy
-                });
+            const string reversalReceiptSql = @"
+                SELECT 'REV-' + CONVERT(VARCHAR(8), GETDATE(), 112) + '-' +
+                    RIGHT('000000' + CONVERT(VARCHAR(20), NEXT VALUE FOR dbo.Seq_EMIReceiptNo), 6);";
 
-            return rowsAffected > 0;
+            const string insertContraSql = @"
+                INSERT INTO EMICollections
+                (
+                    LoanAccountNo,
+                    EMIAmount,
+                    PenaltyAmount,
+                    CollectionDate,
+                    CreatedBy,
+                    CreatedOn,
+                    InstallmentNumber,
+                    ReceiptNumber,
+                    PaymentMode,
+                    PaymentReference,
+                    Remarks,
+                    IsReversed,
+                    EntryType,
+                    ParentCollectionId
+                )
+                VALUES
+                (
+                    @LoanAccountNo,
+                    @EMIAmount,
+                    @PenaltyAmount,
+                    @CollectionDate,
+                    @CreatedBy,
+                    @CreatedOn,
+                    @InstallmentNumber,
+                    @ReceiptNumber,
+                    @PaymentMode,
+                    @PaymentReference,
+                    @Remarks,
+                    0,
+                    'Reversal',
+                    @ParentCollectionId
+                );";
+
+            using var connection = _connectionFactory.CreateConnection();
+            await ((System.Data.Common.DbConnection)connection).OpenAsync();
+            using var transaction = connection.BeginTransaction();
+
+            try
+            {
+                var original = await connection.QueryFirstOrDefaultAsync<EMICollection>(
+                    selectOriginalSql,
+                    new { CollectionId = collectionId },
+                    transaction);
+
+                if (original == null)
+                    return false;
+
+                var loanStatus = await connection.QueryFirstOrDefaultAsync<(bool IsLive, int RemainingInstallments)>(
+                    loanStatusSql,
+                    new { original.LoanAccountNo },
+                    transaction);
+
+                if (!loanStatus.IsLive || loanStatus.RemainingInstallments <= 0)
+                    return false;
+
+                int updated = await connection.ExecuteAsync(
+                    markReversedSql,
+                    new
+                    {
+                        CollectionId = collectionId,
+                        Reason = reason,
+                        ReversedBy = reversedBy
+                    },
+                    transaction);
+
+                if (updated == 0)
+                    return false;
+
+                string reversalReceiptNumber = await connection.ExecuteScalarAsync<string>(
+                    reversalReceiptSql,
+                    transaction: transaction) ?? string.Empty;
+
+                string originalRef = string.IsNullOrWhiteSpace(original.ReceiptNumber)
+                    ? $"Collection #{original.CollectionId}"
+                    : original.ReceiptNumber;
+
+                DateTime nowUtc = DateTime.UtcNow;
+
+                int inserted = await connection.ExecuteAsync(
+                    insertContraSql,
+                    new
+                    {
+                        original.LoanAccountNo,
+                        EMIAmount = -original.EMIAmount,
+                        PenaltyAmount = -original.PenaltyAmount,
+                        CollectionDate = DateTime.Today,
+                        CreatedBy = reversedBy,
+                        CreatedOn = nowUtc,
+                        original.InstallmentNumber,
+                        ReceiptNumber = reversalReceiptNumber,
+                        original.PaymentMode,
+                        original.PaymentReference,
+                        Remarks = $"Reversal of {originalRef}: {reason}",
+                        ParentCollectionId = original.CollectionId
+                    },
+                    transaction);
+
+                if (inserted == 0)
+                    return false;
+
+                transaction.Commit();
+                return true;
+            }
+            catch
+            {
+                transaction.Rollback();
+                throw;
+            }
         }
     }
 }

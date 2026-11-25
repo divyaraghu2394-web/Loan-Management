@@ -40,5 +40,12 @@ namespace LoanManagement.DL.Models
         public string? ModifiedBy { get; set; }
 
         public DateTime? ModifiedOn { get; set; }
+
+        public string EntryType { get; set; } = "Collection";
+
+        public long? ParentCollectionId { get; set; }
+
+        public bool IsReversalEntry =>
+            string.Equals(EntryType, "Reversal", StringComparison.OrdinalIgnoreCase);
     }
 }
